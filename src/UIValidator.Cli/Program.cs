@@ -1,5 +1,6 @@
 ﻿using System.Diagnostics;
 using UIValidator.Core.Config;
+using UIValidator.Core.Display;
 using UIValidator.Core.Reporting;
 using UIValidator.Core.Runner;
 using UIValidator.Core.Windowing;
@@ -18,6 +19,8 @@ internal static class Program
               --open              Open report.html when finished
           uivalidator validate <config.yaml>        Check a configuration file
           uivalidator report <run-dir>              Regenerate report.html from results.json
+          uivalidator displays                      List resolutions and scales of the primary display
+          uivalidator restore-display               Restore the display after an interrupted run
           uivalidator --help                        Show this help
 
         Exit codes: 0 passed (warnings allowed), 1 failures found, 2 invalid config, 3 run errors.
@@ -42,6 +45,8 @@ internal static class Program
                 "run" => Run(options),
                 "validate" => Validate(options),
                 "report" => Report(options),
+                "displays" => Displays(),
+                "restore-display" => RestoreDisplay(),
                 _ => Fail($"Unknown command '{args[0]}'.\n\n{Usage}"),
             };
         }
@@ -121,6 +126,35 @@ internal static class Program
         ReportWriter.WriteAll(run, dir, new OutputConfig { EmbedImages = options.Has("embed") });
         Console.WriteLine($"Report: {Path.Combine(dir, "report.html")}");
         return 0;
+    }
+
+    private static int Displays()
+    {
+        Console.WriteLine($"Primary display: {DisplayManager.PrimaryDevice}");
+        Console.WriteLine($"Current: {EnvironmentController.Describe()}");
+        try
+        {
+            var scale = DpiManager.GetScale();
+            Console.WriteLine($"Scales: {string.Join(", ", DpiManager.GetSupportedScales().Select(s => s + "%"))} (recommended {scale.Recommended}%)");
+        }
+        catch (Exception ex)
+        {
+            Console.WriteLine($"Scales: unavailable ({ex.Message})");
+        }
+        Console.WriteLine("Resolutions:");
+        foreach (var group in DisplayManager.GetSupportedModes().GroupBy(m => (m.Width, m.Height)))
+            Console.WriteLine($"  {group.Key.Width}x{group.Key.Height}  ({string.Join(", ", group.Select(m => m.Frequency + "Hz").Distinct())})");
+        return 0;
+    }
+
+    private static int RestoreDisplay()
+    {
+        if (DisplayManager.LoadState() is null)
+        {
+            Console.WriteLine("Nothing to restore.");
+            return 0;
+        }
+        return DisplayManager.RestoreState(Console.WriteLine) ? 0 : 1;
     }
 
     private static int Fail(string message)

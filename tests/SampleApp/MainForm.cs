@@ -16,9 +16,11 @@ internal sealed class MainForm : Form
     {
         Text = "Sample App";
         Name = "MainForm";
+        // Layout is authored at 96 DPI and scaled by WinForms at higher DPI.
+        AutoScaleDimensions = new SizeF(96F, 96F);
+        AutoScaleMode = AutoScaleMode.Dpi;
         ClientSize = new Size(1000, 700);
         StartPosition = FormStartPosition.CenterScreen;
-        AutoScaleMode = AutoScaleMode.Dpi;
 
         var lblName = new Label { Name = "lblName", Text = "Name:", Location = new Point(20, 24), AutoSize = true };
         var txtName = new TextBox

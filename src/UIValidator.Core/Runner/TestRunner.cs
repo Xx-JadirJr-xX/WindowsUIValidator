@@ -5,6 +5,7 @@ using FlaUI.Core.AutomationElements;
 using UIValidator.Core.Automation;
 using UIValidator.Core.Capture;
 using UIValidator.Core.Config;
+using UIValidator.Core.Display;
 using UIValidator.Core.Model;
 using UIValidator.Core.Reporting;
 using UIValidator.Core.Rules;
@@ -48,13 +49,43 @@ public sealed class TestRunner
         _log($"Running {scenarios.Count} scenario(s) x {_config.Screens.Count} screen(s) against {exe}");
         _log($"Output: {RunDirectory}");
 
+        if (EnvironmentController.RecoverPreviousRun(_log) is { } recovered) run.Warnings.Add(recovered);
+        try { run.OriginalDisplay = EnvironmentController.Describe(); } catch { /* informational only */ }
+
         AppSession? session = null;
+        using var environment = new EnvironmentController(_log);
         try
         {
+            string? lastDisplay = null;
             foreach (var scenario in scenarios)
             {
                 cancellation.ThrowIfCancellationRequested();
                 _log($"Scenario {scenario.Label}");
+
+                var display = $"{scenario.Resolution}|{scenario.DpiScale}";
+                if (display != lastDisplay)
+                {
+                    // Running apps do not always re-layout on display changes; restart them.
+                    session?.Dispose();
+                    session = null;
+                    lastDisplay = display;
+                }
+
+                try
+                {
+                    environment.Apply(scenario);
+                }
+                catch (Exception ex)
+                {
+                    _log($"  Skipped: {ex.Message}");
+                    foreach (var screen in _config.Screens)
+                    {
+                        var skipped = new ScenarioResult { Scenario = scenario, Screen = screen.Name, ErrorMessage = $"Environment not applied: {ex.Message}" };
+                        skipped.ComputeStatus();
+                        run.Results.Add(skipped);
+                    }
+                    continue;
+                }
 
                 foreach (var screen in _config.Screens)
                 {
@@ -75,6 +106,7 @@ public sealed class TestRunner
         finally
         {
             session?.Dispose();
+            environment.Dispose();
             run.FinishedAt = DateTimeOffset.Now;
             ReportWriter.WriteAll(run, RunDirectory, _config.Output);
         }

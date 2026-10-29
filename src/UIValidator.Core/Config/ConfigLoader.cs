@@ -48,8 +48,8 @@ public static class ConfigLoader
                 errors.Add($"Invalid window size '{w}'. Expected 'maximized', 'current' or WIDTHxHEIGHT.");
 
         foreach (var d in config.Matrix.DpiScales)
-            if (d is < 100 or > 500)
-                errors.Add($"Invalid DPI scale {d}. Expected a percentage between 100 and 500.");
+            if (!Display.DpiManager.Steps.Contains(d))
+                errors.Add($"Invalid DPI scale {d}. Expected one of {string.Join(", ", Display.DpiManager.Steps)}.");
 
         if (config.Screens.Count == 0)
             errors.Add("At least one entry in 'screens' is required.");
