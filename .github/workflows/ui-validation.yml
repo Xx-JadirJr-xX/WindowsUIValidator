@@ -1,0 +1,34 @@
+name: UI validation (sample app)
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+
+jobs:
+  validate:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+
+      - name: Build
+        run: dotnet build -c Release
+
+      - name: Run UI validation
+        shell: pwsh
+        run: |
+          ./src/UIValidator.Cli/bin/Release/net8.0-windows10.0.19041.0/uivalidator.exe run configs/ci.yaml --out ui-results/ci
+          # The sample app contains planted bugs, so exit code 1 (failures found) is expected.
+          # Exit codes 2 (invalid config) and 3 (run errors) still fail the job.
+          if ($LASTEXITCODE -gt 1) { exit $LASTEXITCODE }
+          exit 0
+
+      - name: Upload report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ui-validation-report
+          path: ui-results/ci

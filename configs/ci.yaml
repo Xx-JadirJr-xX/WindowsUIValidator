@@ -1,0 +1,23 @@
+# Configuration used by the GitHub Actions workflow.
+# Hosted runners have a fixed virtual display, so only window sizes are varied here.
+app:
+  path: "../tests/SampleApp/bin/Release/net8.0-windows/SampleApp.exe"
+  startupTimeoutSec: 60
+
+matrix:
+  windowSizes: [1024x768, 800x600]
+
+screens:
+  - name: Main
+  - name: Settings
+    window: "Settings"
+    steps:
+      - click: { automationId: btnSettings }
+      - waitFor: { name: "Settings", controlType: Window }
+
+rules:
+  visualDiff: { enabled: false }
+
+output:
+  directory: "../ui-results"
+  embedImages: true

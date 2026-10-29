@@ -40,6 +40,30 @@ public class ReportTests
     }
 
     [Fact]
+    public void JUnit_reports_failures_per_screen()
+    {
+        var xml = JUnitWriter.Build(SampleRun());
+        var suite = xml.Root!.Element("testsuite")!;
+        Assert.Equal("Main", suite.Attribute("name")!.Value);
+        Assert.Equal("1", suite.Attribute("failures")!.Value);
+        Assert.NotNull(suite.Element("testcase")!.Element("failure"));
+    }
+
+    [Fact]
+    public void Comparison_finds_new_and_resolved_problems()
+    {
+        var before = SampleRun();
+        var after = SampleRun();
+        after.Results[0].Findings.Clear();
+        after.Results[0].Findings.Add(new Finding { Rule = "clipping", Severity = Severity.Error, Message = "m", AutomationId = "btnOk" });
+
+        var cmp = RunComparer.Compare(after, before, "prev");
+        Assert.Single(cmp.NewKeys);
+        Assert.Single(cmp.ResolvedKeys);
+        Assert.StartsWith("clipping|btnOk", cmp.NewKeys[0]);
+    }
+
+    [Fact]
     public void Matrix_expands_all_combinations()
     {
         var list = MatrixBuilder.Build(new MatrixConfig { Resolutions = ["1920x1080", "1366x768"], DpiScales = [100, 150], WindowSizes = ["maximized"] });

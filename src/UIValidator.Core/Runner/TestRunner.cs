@@ -34,6 +34,45 @@ public sealed class TestRunner
     /// <summary>Directory where the last run wrote its artifacts.</summary>
     public string? RunDirectory { get; private set; }
 
+    /// <summary>Previous run to compare with: a run directory, a results.json path, or "latest".</summary>
+    public string? CompareWith { get; set; }
+
+    private void AttachComparison(RunResult run)
+    {
+        if (CompareWith is null) return;
+        try
+        {
+            var path = CompareWith;
+            if (path.Equals("latest", StringComparison.OrdinalIgnoreCase))
+            {
+                var root = Path.GetDirectoryName(Path.GetFullPath(RunDirectory!))!;
+                path = Directory.GetDirectories(root)
+                    .Where(d => !Path.GetFullPath(d).Equals(Path.GetFullPath(RunDirectory!), StringComparison.OrdinalIgnoreCase))
+                    .Where(d => File.Exists(Path.Combine(d, "results.json")))
+                    .OrderByDescending(d => File.GetLastWriteTimeUtc(Path.Combine(d, "results.json")))
+                    .FirstOrDefault()!;
+                if (path is null)
+                {
+                    _log("No previous run found to compare with.");
+                    return;
+                }
+            }
+
+            var previous = ReportWriter.LoadResults(path);
+            if (previous is null)
+            {
+                run.Warnings.Add($"Previous run not found: {path}");
+                return;
+            }
+            run.Comparison = RunComparer.Compare(run, previous, $"{Path.GetFileName(Path.TrimEndingDirectorySeparator(path))} ({previous.StartedAt:g})");
+            _log($"Compared with {path}: {run.Comparison.NewKeys.Count} new, {run.Comparison.ResolvedKeys.Count} resolved problem(s).");
+        }
+        catch (Exception ex)
+        {
+            run.Warnings.Add($"Comparison with previous run failed: {ex.Message}");
+        }
+    }
+
     public RunResult Run(string? outputDirectory = null, CancellationToken cancellation = default)
     {
         var exe = _config.ResolvePath(_config.App.Path);
@@ -114,6 +153,7 @@ public sealed class TestRunner
             session?.Dispose();
             environment.Dispose();
             run.FinishedAt = DateTimeOffset.Now;
+            AttachComparison(run);
             ReportWriter.WriteAll(run, RunDirectory, _config.Output);
         }
 

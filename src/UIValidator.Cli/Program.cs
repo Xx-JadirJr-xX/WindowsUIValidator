@@ -19,6 +19,9 @@ internal static class Program
               --out <dir>         Output directory (default: output.directory/<timestamp>)
               --open              Open report.html when finished
               --update-baselines  Approve all screenshots of this run as new baselines
+              --compare <dir|latest>
+                                  Mark problems that are new or resolved since a previous run
+              --fail-on warning   Also return exit code 1 when only warnings were found
           uivalidator approve <run-dir> [--filter <text>]
                                                     Accept a run's screenshots as visual baselines
           uivalidator validate <config.yaml>        Check a configuration file
@@ -109,7 +112,7 @@ internal static class Program
             cts.Cancel();
         };
 
-        var runner = new TestRunner(config, Console.WriteLine);
+        var runner = new TestRunner(config, Console.WriteLine) { CompareWith = options.Get("compare") };
         var run = runner.Run(options.Get("out"), cts.Token);
 
         var report = Path.Combine(runner.RunDirectory!, "report.html");
@@ -117,6 +120,7 @@ internal static class Program
         Console.WriteLine($"Passed: {run.Count(Core.Model.ResultStatus.Passed)}  Warnings: {run.Count(Core.Model.ResultStatus.Warning)}  " +
                           $"Failed: {run.Count(Core.Model.ResultStatus.Failed)}  Errors: {run.Count(Core.Model.ResultStatus.Error)}");
         Console.WriteLine($"Report: {report}");
+        Console.WriteLine($"JUnit:  {Path.Combine(runner.RunDirectory!, "junit.xml")}");
 
         if (options.Has("update-baselines"))
         {
@@ -127,6 +131,9 @@ internal static class Program
         if (options.Has("open"))
             Process.Start(new ProcessStartInfo(report) { UseShellExecute = true });
 
+        if (run.ExitCode == 0 && options.Get("fail-on")?.Equals("warning", StringComparison.OrdinalIgnoreCase) == true
+            && run.Count(Core.Model.ResultStatus.Warning) > 0)
+            return 1;
         return run.ExitCode;
     }
 

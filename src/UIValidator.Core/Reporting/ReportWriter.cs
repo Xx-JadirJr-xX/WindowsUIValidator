@@ -6,7 +6,7 @@ using UIValidator.Core.Model;
 
 namespace UIValidator.Core.Reporting;
 
-/// <summary>Writes run artifacts: results.json and the self-contained report.html.</summary>
+/// <summary>Writes run artifacts: results.json, the self-contained report.html and junit.xml.</summary>
 public static class ReportWriter
 {
     public static readonly JsonSerializerOptions JsonOptions = new()
@@ -25,6 +25,7 @@ public static class ReportWriter
         Directory.CreateDirectory(directory);
         File.WriteAllText(Path.Combine(directory, "results.json"), JsonSerializer.Serialize(run, JsonOptions));
         File.WriteAllText(Path.Combine(directory, "report.html"), RenderHtml(run, directory, output.EmbedImages));
+        JUnitWriter.Write(run, Path.Combine(directory, "junit.xml"));
     }
 
     /// <summary>Injects the run data into the embedded HTML template.</summary>
