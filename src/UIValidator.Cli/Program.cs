@@ -1,4 +1,8 @@
-﻿using UIValidator.Core.Config;
+﻿using System.Diagnostics;
+using UIValidator.Core.Config;
+using UIValidator.Core.Reporting;
+using UIValidator.Core.Runner;
+using UIValidator.Core.Windowing;
 
 namespace UIValidator.Cli;
 
@@ -9,12 +13,21 @@ internal static class Program
         Windows UI Validator - automated UI testing across resolutions and DPI scales.
 
         Usage:
-          uivalidator validate <config.yaml>     Check a configuration file
-          uivalidator --help                     Show this help
+          uivalidator run <config.yaml> [options]   Run the scenario matrix and write a report
+              --out <dir>         Output directory (default: output.directory/<timestamp>)
+              --open              Open report.html when finished
+          uivalidator validate <config.yaml>        Check a configuration file
+          uivalidator report <run-dir>              Regenerate report.html from results.json
+          uivalidator --help                        Show this help
+
+        Exit codes: 0 passed (warnings allowed), 1 failures found, 2 invalid config, 3 run errors.
         """;
 
     private static int Main(string[] args)
     {
+        WindowManager.EnsurePerMonitorDpiAwareness();
+        Console.OutputEncoding = System.Text.Encoding.UTF8;
+
         if (args.Length == 0 || args[0] is "-h" or "--help" or "help")
         {
             Console.WriteLine(Usage);
@@ -23,11 +36,18 @@ internal static class Program
 
         try
         {
+            var options = CliArgs.Parse(args.Skip(1));
             return args[0] switch
             {
-                "validate" => Validate(args),
+                "run" => Run(options),
+                "validate" => Validate(options),
+                "report" => Report(options),
                 _ => Fail($"Unknown command '{args[0]}'.\n\n{Usage}"),
             };
+        }
+        catch (OperationCanceledException)
+        {
+            return Fail("Cancelled.");
         }
         catch (Exception ex)
         {
@@ -35,14 +55,72 @@ internal static class Program
         }
     }
 
-    private static int Validate(string[] args)
+    private static ValidatorConfig LoadValid(CliArgs options)
     {
-        if (args.Length < 2) return Fail("Missing config path.");
-        var config = ConfigLoader.Load(args[1]);
+        var path = options.Positional.FirstOrDefault() ?? throw new ArgumentException("Missing config path.");
+        var config = ConfigLoader.Load(path);
         var errors = ConfigLoader.Validate(config);
-        foreach (var e in errors) Console.Error.WriteLine($"error: {e}");
-        if (errors.Count == 0) Console.WriteLine("Configuration is valid.");
-        return errors.Count == 0 ? 0 : 2;
+        if (errors.Count > 0)
+            throw new InvalidConfigException(errors);
+        return config;
+    }
+
+    private static int Validate(CliArgs options)
+    {
+        try
+        {
+            LoadValid(options);
+            Console.WriteLine("Configuration is valid.");
+            return 0;
+        }
+        catch (InvalidConfigException ex)
+        {
+            foreach (var e in ex.Errors) Console.Error.WriteLine($"error: {e}");
+            return 2;
+        }
+    }
+
+    private static int Run(CliArgs options)
+    {
+        ValidatorConfig config;
+        try { config = LoadValid(options); }
+        catch (InvalidConfigException ex)
+        {
+            foreach (var e in ex.Errors) Console.Error.WriteLine($"error: {e}");
+            return 2;
+        }
+
+        using var cts = new CancellationTokenSource();
+        Console.CancelKeyPress += (_, e) =>
+        {
+            // Let the runner unwind so the display configuration is restored.
+            e.Cancel = true;
+            Console.WriteLine("Cancelling - restoring environment...");
+            cts.Cancel();
+        };
+
+        var runner = new TestRunner(config, Console.WriteLine);
+        var run = runner.Run(options.Get("out"), cts.Token);
+
+        var report = Path.Combine(runner.RunDirectory!, "report.html");
+        Console.WriteLine();
+        Console.WriteLine($"Passed: {run.Count(Core.Model.ResultStatus.Passed)}  Warnings: {run.Count(Core.Model.ResultStatus.Warning)}  " +
+                          $"Failed: {run.Count(Core.Model.ResultStatus.Failed)}  Errors: {run.Count(Core.Model.ResultStatus.Error)}");
+        Console.WriteLine($"Report: {report}");
+
+        if (options.Has("open"))
+            Process.Start(new ProcessStartInfo(report) { UseShellExecute = true });
+
+        return run.ExitCode;
+    }
+
+    private static int Report(CliArgs options)
+    {
+        var dir = options.Positional.FirstOrDefault() ?? throw new ArgumentException("Missing run directory.");
+        var run = ReportWriter.LoadResults(dir) ?? throw new FileNotFoundException($"results.json not found in {dir}");
+        ReportWriter.WriteAll(run, dir, new OutputConfig { EmbedImages = options.Has("embed") });
+        Console.WriteLine($"Report: {Path.Combine(dir, "report.html")}");
+        return 0;
     }
 
     private static int Fail(string message)
@@ -50,4 +128,38 @@ internal static class Program
         Console.Error.WriteLine(message);
         return 1;
     }
+}
+
+internal sealed class InvalidConfigException(List<string> errors) : Exception("Invalid configuration.")
+{
+    public List<string> Errors { get; } = errors;
+}
+
+/// <summary>Minimal argument parser: positionals, <c>--flag</c> and <c>--key value</c>.</summary>
+internal sealed class CliArgs
+{
+    private static readonly HashSet<string> Flags = ["open", "embed", "update-baselines", "approve-all"];
+
+    public List<string> Positional { get; } = [];
+    private readonly Dictionary<string, string?> _named = new(StringComparer.OrdinalIgnoreCase);
+
+    public static CliArgs Parse(IEnumerable<string> args)
+    {
+        var result = new CliArgs();
+        var list = args.ToList();
+        for (var i = 0; i < list.Count; i++)
+        {
+            var a = list[i];
+            if (!a.StartsWith("--")) { result.Positional.Add(a); continue; }
+            var key = a[2..];
+            if (Flags.Contains(key) || i + 1 >= list.Count || list[i + 1].StartsWith("--"))
+                result._named[key] = null;
+            else
+                result._named[key] = list[++i];
+        }
+        return result;
+    }
+
+    public bool Has(string key) => _named.ContainsKey(key);
+    public string? Get(string key) => _named.TryGetValue(key, out var v) ? v : null;
 }

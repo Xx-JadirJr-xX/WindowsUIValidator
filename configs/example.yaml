@@ -32,4 +32,4 @@ rules:
 output:
   directory: "../ui-results"
   baselineDirectory: "../baselines"
-  embedImages: false
+  embedImages: true

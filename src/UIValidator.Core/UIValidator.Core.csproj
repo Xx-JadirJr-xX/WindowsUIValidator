@@ -13,6 +13,12 @@
   </ItemGroup>
 
   <ItemGroup>
+    <!-- WinForms is only used for text measurement; avoid clashes with FlaUI types. -->
+    <Using Remove="System.Windows.Forms" />
+    <Using Remove="System.Drawing" />
+  </ItemGroup>
+
+  <ItemGroup>
     <EmbeddedResource Include="Reporting\Templates\report.html" LogicalName="UIValidator.Report.Template" />
   </ItemGroup>
 

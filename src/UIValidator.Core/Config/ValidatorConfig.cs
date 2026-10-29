@@ -1,4 +1,4 @@
-namespace UIValidator.Core.Config;
+﻿namespace UIValidator.Core.Config;
 
 /// <summary>Root of the YAML/JSON test configuration.</summary>
 public sealed class ValidatorConfig
@@ -170,5 +170,5 @@ public sealed class OutputConfig
     public string BaselineDirectory { get; set; } = "baselines";
 
     /// <summary>Embed screenshots as base64 in report.html (fully self-contained single file).</summary>
-    public bool EmbedImages { get; set; } = false;
+    public bool EmbedImages { get; set; } = true;
 }
