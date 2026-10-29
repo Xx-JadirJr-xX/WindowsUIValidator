@@ -1,0 +1,35 @@
+# Example configuration targeting the bundled sample app.
+# Build it first:  dotnet build tests/SampleApp -c Release
+app:
+  path: "../tests/SampleApp/bin/Release/net8.0-windows/SampleApp.exe"
+  startupTimeoutSec: 20
+  restartPerScenario: true
+
+matrix:
+  # Leave empty to keep the current display resolution / scale.
+  resolutions: []
+  dpiScales: []
+  windowSizes: [maximized, 1024x768, 800x600]
+
+screens:
+  - name: Main
+  - name: Settings
+    window: "Settings"
+    steps:
+      - click: { automationId: btnSettings }
+      - waitFor: { name: "Settings", controlType: Window }
+
+rules:
+  clipping: { enabled: true }
+  overlap: { enabled: true, minIntersectionPx: 4 }
+  textTruncation: { enabled: true, useOcr: false }
+  offscreen: { enabled: true }
+  minSize: { enabled: true, minWidth: 16, minHeight: 16 }
+  windowOnScreen: { enabled: true }
+  visualDiff: { enabled: true, threshold: 0.98 }
+  ignoreAutomationIds: []
+
+output:
+  directory: "../ui-results"
+  baselineDirectory: "../baselines"
+  embedImages: false
