@@ -81,6 +81,26 @@ public class RuleTests
     }
 
     [Fact]
+    public void Composite_control_parts_are_ignored()
+    {
+        var ctx = Context(
+            Node(1, "ComboBox", new Rect(20, 60, 200, 23)),
+            Node(2, "Text", new Rect(22, 62, 180, 19), parent: 1),
+            Node(3, "Button", new Rect(200, 61, 15, 21), parent: 1));
+        Assert.Empty(new OverlapRule().Evaluate(ctx));
+        Assert.Empty(new MinSizeRule().Evaluate(ctx));
+    }
+
+    [Fact]
+    public void Key_chords_are_parsed()
+    {
+        var keys = UIValidator.Core.Automation.StepRunner.ParseKeys("ctrl+shift+s");
+        Assert.Equal(3, keys.Length);
+        Assert.Single(UIValidator.Core.Automation.StepRunner.ParseKeys("F4"));
+        Assert.Throws<ArgumentException>(() => UIValidator.Core.Automation.StepRunner.ParseKeys("ctrl+nope"));
+    }
+
+    [Fact]
     public void MinSize_scales_with_dpi()
     {
         var root = Context(Node(1, "Button", new Rect(10, 100, 20, 20)));

@@ -34,8 +34,17 @@ public sealed class RuleContext
     public static readonly HashSet<string> Interactive =
         ["Button", "CheckBox", "RadioButton", "Hyperlink", "ComboBox", "Edit", "Slider", "Spinner", "MenuItem", "TabItem", "SplitButton"];
 
+    /// <summary>Composite controls whose internal parts (drop-down button, inner edit) are not validated individually.</summary>
+    public static readonly HashSet<string> Composite = ["ComboBox", "Spinner", "SplitButton", "ScrollBar", "Slider"];
+
+    /// <summary>
+    /// True for elements that should not be validated: empty bounds, explicitly ignored ids
+    /// and internal parts of composite controls.
+    /// </summary>
     public bool IsIgnored(UiNode node) =>
-        node.Bounds.IsEmpty || (node.AutomationId.Length > 0 && Config.IgnoreAutomationIds.Contains(node.AutomationId));
+        node.Bounds.IsEmpty ||
+        (node.AutomationId.Length > 0 && Config.IgnoreAutomationIds.Contains(node.AutomationId)) ||
+        Tree.AncestorsOf(node).Any(a => Composite.Contains(a.ControlType));
 
     public bool IsInsideScrollContainer(UiNode node) => Tree.AncestorsOf(node).Any(a => ScrollContainers.Contains(a.ControlType));
 

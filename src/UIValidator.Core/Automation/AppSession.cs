@@ -119,17 +119,12 @@ public sealed class AppSession : IDisposable
         return result;
     }
 
+    /// <summary>
+    /// Terminates the application. The process under test is disposable, so it is killed
+    /// directly: a graceful close would hang on open modal dialogs or "save changes?" prompts.
+    /// </summary>
     public void Dispose()
     {
-        try
-        {
-            if (!App.HasExited)
-            {
-                App.Close();
-                if (!App.HasExited) App.WaitWhileBusy(TimeSpan.FromSeconds(2));
-            }
-        }
-        catch { }
         TryKill(App);
         App.Dispose();
         Automation.Dispose();

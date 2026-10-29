@@ -128,6 +128,8 @@ public sealed class TestRunner
             WindowManager.BringToFront(mainHandle);
             Thread.Sleep(300);
 
+            new StepRunner(session, result.Log.Add).RunAll(screen.Steps);
+
             target = session.FindWindow(screen.Window, TimeSpan.FromSeconds(10));
             var hwnd = target.Properties.NativeWindowHandle.ValueOrDefault;
             WindowManager.BringToFront(hwnd);
@@ -137,7 +139,8 @@ public sealed class TestRunner
         catch (Exception ex)
         {
             result.ErrorMessage = ex.Message;
-            result.Log.Add(ex.ToString());
+            result.Log.Add(ex is StepFailedException ? ex.Message : ex.ToString());
+            CaptureFailure(result, session);
             // A broken session would poison the next screens; start fresh.
             session?.Dispose();
             session = null;
@@ -185,13 +188,32 @@ public sealed class TestRunner
         File.WriteAllText(Path.Combine(RunDirectory!, result.TreePath), JsonSerializer.Serialize(tree.Nodes, ReportWriter.JsonOptions));
     }
 
+    /// <summary>Saves a screenshot of the main window when a screen fails, to help diagnose the error.</summary>
+    private void CaptureFailure(ScenarioResult result, AppSession? session)
+    {
+        try
+        {
+            if (session is null || !WindowManager.Exists(session.MainHandle)) return;
+            using var bmp = WindowCapture.Capture(session.MainHandle, out var bounds);
+            result.WindowBounds = bounds;
+            result.ScreenshotPath = $"images/{ArtifactName(result)}.png";
+            bmp.Save(Path.Combine(RunDirectory!, result.ScreenshotPath), ImageFormat.Png);
+        }
+        catch
+        {
+            // Best effort only.
+        }
+    }
+
     /// <summary>Brings the app back to its initial state when it is reused across screens.</summary>
     private void ResetScreen(AppSession session, ScreenConfig screen, Window? target)
     {
         if (_config.App.RestartPerScenario) return;
         try
         {
-            if (target is not null && target.Properties.NativeWindowHandle.ValueOrDefault != session.MainHandle)
+            if (screen.Teardown.Count > 0)
+                new StepRunner(session, _ => { }).RunAll(screen.Teardown);
+            else if (target is not null && target.Properties.NativeWindowHandle.ValueOrDefault != session.MainHandle)
                 target.Close();
         }
         catch (Exception ex)
