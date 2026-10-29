@@ -102,6 +102,7 @@ public sealed class RunResult
     public string Machine { get; init; } = Environment.MachineName;
     public string OsVersion { get; init; } = Environment.OSVersion.VersionString;
     public string? OriginalDisplay { get; set; }
+    public string? BaselineDirectory { get; set; }
     public List<string> Screens { get; init; } = [];
     public List<Scenario> Scenarios { get; init; } = [];
     public List<ScenarioResult> Results { get; set; } = [];

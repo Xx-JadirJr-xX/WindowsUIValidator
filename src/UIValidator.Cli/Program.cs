@@ -3,6 +3,7 @@ using UIValidator.Core.Config;
 using UIValidator.Core.Display;
 using UIValidator.Core.Reporting;
 using UIValidator.Core.Runner;
+using UIValidator.Core.Visual;
 using UIValidator.Core.Windowing;
 
 namespace UIValidator.Cli;
@@ -17,6 +18,9 @@ internal static class Program
           uivalidator run <config.yaml> [options]   Run the scenario matrix and write a report
               --out <dir>         Output directory (default: output.directory/<timestamp>)
               --open              Open report.html when finished
+              --update-baselines  Approve all screenshots of this run as new baselines
+          uivalidator approve <run-dir> [--filter <text>]
+                                                    Accept a run's screenshots as visual baselines
           uivalidator validate <config.yaml>        Check a configuration file
           uivalidator report <run-dir>              Regenerate report.html from results.json
           uivalidator displays                      List resolutions and scales of the primary display
@@ -45,6 +49,7 @@ internal static class Program
                 "run" => Run(options),
                 "validate" => Validate(options),
                 "report" => Report(options),
+                "approve" => Approve(options),
                 "displays" => Displays(),
                 "restore-display" => RestoreDisplay(),
                 _ => Fail($"Unknown command '{args[0]}'.\n\n{Usage}"),
@@ -113,6 +118,12 @@ internal static class Program
                           $"Failed: {run.Count(Core.Model.ResultStatus.Failed)}  Errors: {run.Count(Core.Model.ResultStatus.Error)}");
         Console.WriteLine($"Report: {report}");
 
+        if (options.Has("update-baselines"))
+        {
+            var approved = new BaselineStore(run.BaselineDirectory!).Approve(run, runner.RunDirectory!);
+            Console.WriteLine($"Approved {approved.Count} baseline(s) in {run.BaselineDirectory}");
+        }
+
         if (options.Has("open"))
             Process.Start(new ProcessStartInfo(report) { UseShellExecute = true });
 
@@ -125,6 +136,19 @@ internal static class Program
         var run = ReportWriter.LoadResults(dir) ?? throw new FileNotFoundException($"results.json not found in {dir}");
         ReportWriter.WriteAll(run, dir, new OutputConfig { EmbedImages = options.Has("embed") });
         Console.WriteLine($"Report: {Path.Combine(dir, "report.html")}");
+        return 0;
+    }
+
+    private static int Approve(CliArgs options)
+    {
+        var dir = options.Positional.FirstOrDefault() ?? throw new ArgumentException("Missing run directory.");
+        var run = ReportWriter.LoadResults(dir) ?? throw new FileNotFoundException($"results.json not found in {dir}");
+        var baselineDir = options.Get("baselines") ?? run.BaselineDirectory
+            ?? throw new ArgumentException("The run has no baseline directory; pass --baselines <dir>.");
+
+        var approved = new BaselineStore(baselineDir).Approve(run, dir, options.Get("filter"));
+        foreach (var name in approved) Console.WriteLine($"  approved {name}");
+        Console.WriteLine($"Approved {approved.Count} baseline(s) in {baselineDir}");
         return 0;
     }
 

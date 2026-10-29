@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Drawing;
 using System.Drawing.Imaging;
 using System.Text.Json;
 using FlaUI.Core.AutomationElements;
@@ -9,6 +10,7 @@ using UIValidator.Core.Display;
 using UIValidator.Core.Model;
 using UIValidator.Core.Reporting;
 using UIValidator.Core.Rules;
+using UIValidator.Core.Visual;
 using UIValidator.Core.Windowing;
 
 namespace UIValidator.Core.Runner;
@@ -19,12 +21,14 @@ public sealed class TestRunner
     private readonly ValidatorConfig _config;
     private readonly Action<string> _log;
     private readonly RuleEngine _rules;
+    private readonly BaselineStore _baselines;
 
     public TestRunner(ValidatorConfig config, Action<string>? log = null)
     {
         _config = config;
         _log = log ?? (_ => { });
         _rules = RuleEngine.FromConfig(config.Rules);
+        _baselines = new BaselineStore(config.ResolvePath(config.Output.BaselineDirectory));
     }
 
     /// <summary>Directory where the last run wrote its artifacts.</summary>
@@ -40,6 +44,7 @@ public sealed class TestRunner
             AppVersion = FileVersionInfo.GetVersionInfo(exe).FileVersion,
             Screens = _config.Screens.Select(s => s.Name).ToList(),
             Scenarios = scenarios,
+            BaselineDirectory = _baselines.Directory,
         };
 
         RunDirectory = outputDirectory ?? Path.Combine(_config.ResolvePath(_config.Output.Directory), run.StartedAt.ToString("yyyyMMdd-HHmmss"));
@@ -186,6 +191,65 @@ public sealed class TestRunner
 
         result.TreePath = $"trees/{baseName}.json";
         File.WriteAllText(Path.Combine(RunDirectory!, result.TreePath), JsonSerializer.Serialize(tree.Nodes, ReportWriter.JsonOptions));
+
+        if (_config.Rules.VisualDiff.Enabled)
+            CompareWithBaseline(result, screenshot, context, baseName);
+    }
+
+    private void CompareWithBaseline(ScenarioResult result, Bitmap screenshot, RuleContext context, string baseName)
+    {
+        var cfg = _config.Rules.VisualDiff;
+        if (!_baselines.Exists(baseName))
+        {
+            result.Findings.Add(new Finding
+            {
+                Rule = "visualDiff",
+                Severity = Severity.Info,
+                Message = "No baseline yet. Run 'uivalidator approve <run-dir>' to accept this screenshot as the reference.",
+            });
+            return;
+        }
+
+        // Load through a memory copy so the baseline file is not kept locked.
+        using var baseline = new Bitmap(new MemoryStream(File.ReadAllBytes(_baselines.PathFor(baseName))));
+        var masks = context.Tree.Nodes
+            .Where(n => n.AutomationId.Length > 0 && cfg.MaskAutomationIds.Contains(n.AutomationId))
+            .Select(n => context.ToImage(n.Bounds))
+            .ToList();
+
+        using var comparison = ImageComparer.Compare(screenshot, baseline, cfg.PixelTolerance, masks);
+        result.BaselinePath = $"images/{baseName}.baseline.png";
+        baseline.Save(Path.Combine(RunDirectory!, result.BaselinePath), ImageFormat.Png);
+        result.Similarity = Math.Round(comparison.Similarity, 4);
+
+        if (comparison.DiffImage is not null)
+        {
+            result.DiffPath = $"images/{baseName}.diff.png";
+            comparison.DiffImage.Save(Path.Combine(RunDirectory!, result.DiffPath), ImageFormat.Png);
+        }
+
+        if (comparison.SizeMismatch)
+        {
+            result.Findings.Add(new Finding
+            {
+                Rule = "visualDiff",
+                Severity = Severity.Error,
+                Message = $"Screenshot size {screenshot.Width}x{screenshot.Height} differs from the baseline {baseline.Width}x{baseline.Height}.",
+            });
+        }
+        else if (comparison.Similarity < cfg.Threshold || comparison.ChangedPixelRatio > cfg.MaxChangedPixelRatio)
+        {
+            var inv = System.Globalization.CultureInfo.InvariantCulture;
+            result.Findings.Add(new Finding
+            {
+                Rule = "visualDiff",
+                Severity = Severity.Error,
+                Message = string.Format(inv,
+                    "Visual difference from baseline: similarity {0:P2} (min {1:P1}), {2:P2} of pixels changed (max {3:P2}).",
+                    comparison.Similarity, cfg.Threshold, comparison.ChangedPixelRatio, cfg.MaxChangedPixelRatio),
+                Bounds = comparison.ChangedRegion,
+            });
+        }
     }
 
     /// <summary>Saves a screenshot of the main window when a screen fails, to help diagnose the error.</summary>

@@ -56,6 +56,8 @@ public static class ConfigLoader
 
         if (config.Rules.VisualDiff.Threshold is < 0 or > 1)
             errors.Add("rules.visualDiff.threshold must be between 0 and 1.");
+        if (config.Rules.VisualDiff.MaxChangedPixelRatio is < 0 or > 1)
+            errors.Add("rules.visualDiff.maxChangedPixelRatio must be between 0 and 1.");
 
         return errors;
     }

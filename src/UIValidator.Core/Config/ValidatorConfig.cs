@@ -162,6 +162,15 @@ public sealed class VisualDiffConfig : ToggleRule
 
     /// <summary>Per-channel difference (0..255) below which pixels are considered equal.</summary>
     public int PixelTolerance { get; set; } = 16;
+
+    /// <summary>
+    /// Maximum fraction (0..1) of changed pixels. Catches small, localized regressions that a
+    /// whole-window SSIM dilutes, while tolerating a blinking caret.
+    /// </summary>
+    public double MaxChangedPixelRatio { get; set; } = 0.002;
+
+    /// <summary>Elements with dynamic content (clocks, carets, animations) excluded from the comparison.</summary>
+    public List<string> MaskAutomationIds { get; set; } = [];
 }
 
 public sealed class OutputConfig

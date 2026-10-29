@@ -82,6 +82,7 @@ code { font-family: Consolas, "Cascadia Mono", monospace; font-size: 12px; backg
 #detail .drawer-head { position: sticky; top: 0; background: var(--surface); border-bottom: 1px solid var(--border); padding: 12px 20px; display: flex; gap: 12px; align-items: center; z-index: 2; flex-wrap: wrap; }
 #detail .drawer-head h2 { margin: 0; font-size: 17px; }
 #detail .drawer-body { padding: 16px 20px; display: grid; grid-template-columns: minmax(0, 3fr) minmax(320px, 2fr); gap: 16px; }
+#detail .drawer-body > div { min-width: 0; }
 @media (max-width: 1000px) { #detail .drawer-body { grid-template-columns: 1fr; } }
 .facts { display: grid; grid-template-columns: auto 1fr; gap: 4px 12px; padding: 12px 16px; font-size: 13px; }
 .facts dt { color: var(--muted); } .facts dd { margin: 0; }
