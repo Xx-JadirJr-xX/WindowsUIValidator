@@ -144,8 +144,21 @@ public sealed class TextTruncationConfig : ToggleRule
     /// <summary>Also run Windows OCR on each element to detect trailing ellipses.</summary>
     public bool UseOcr { get; set; } = false;
 
-    /// <summary>Tolerance in pixels before reporting truncation.</summary>
+    /// <summary>Tolerance in logical pixels before reporting truncation.</summary>
     public int TolerancePx { get; set; } = 2;
+
+    /// <summary>
+    /// Font assumed for measurement. UI Automation does not expose the font of most controls;
+    /// "Segoe UI" 9pt is the default of WinForms (.NET 6+), WPF and Win32 dialogs.
+    /// </summary>
+    public string FontFamily { get; set; } = "Segoe UI";
+    public float FontSizePt { get; set; } = 9f;
+
+    /// <summary>Control types whose Name is their visible caption.</summary>
+    public List<string> ControlTypes { get; set; } = ["Text", "Button", "CheckBox", "RadioButton", "Hyperlink", "TabItem", "Group"];
+
+    /// <summary>OCR language tag (e.g. "en-US", "pt-BR"); empty uses the user profile languages.</summary>
+    public string OcrLanguage { get; set; } = "";
 }
 
 public sealed class MinSizeConfig : ToggleRule

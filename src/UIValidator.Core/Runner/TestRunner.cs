@@ -54,6 +54,7 @@ public sealed class TestRunner
         _log($"Running {scenarios.Count} scenario(s) x {_config.Screens.Count} screen(s) against {exe}");
         _log($"Output: {RunDirectory}");
 
+        run.Warnings.AddRange(_rules.Warnings);
         if (EnvironmentController.RecoverPreviousRun(_log) is { } recovered) run.Warnings.Add(recovered);
         try { run.OriginalDisplay = EnvironmentController.Describe(); } catch { /* informational only */ }
 
